@@ -1,29 +1,872 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Civil Construction ERP API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: dashboard
+  - name: projects
+  - name: finance
+  - name: procurement
+  - name: inventory
+  - name: tenders
+  - name: vehicles
+  - name: hr
+  - name: vendors
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
-      summary: Health check
-      description: Returns server health status
       responses:
         "200":
-          description: Healthy
+          description: Success
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # Dashboard
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/recent-activity:
+    get:
+      operationId: getRecentActivity
+      tags: [dashboard]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityItem"
+
+  # Projects
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [planning, active, on_hold, completed, cancelled]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/stats:
+    get:
+      operationId: getProjectStats
+      tags: [projects]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectStats"
+
+  # Finance
+  /finance/transactions:
+    get:
+      operationId: listTransactions
+      tags: [finance]
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [income, expense]
+        - name: projectId
+          in: query
+          schema:
+            type: integer
+        - name: month
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Transaction"
+    post:
+      operationId: createTransaction
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransactionBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
+  /finance/summary:
+    get:
+      operationId: getFinanceSummary
+      tags: [finance]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceSummary"
+
+  /finance/monthly-cashflow:
+    get:
+      operationId: getMonthlyCashflow
+      tags: [finance]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MonthlyCashflow"
+
+  /finance/invoices:
+    get:
+      operationId: listInvoices
+      tags: [finance]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, paid, overdue]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Invoice"
+    post:
+      operationId: createInvoice
+      tags: [finance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInvoiceBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+
+  # Procurement
+  /procurement/purchase-orders:
+    get:
+      operationId: listPurchaseOrders
+      tags: [procurement]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, pending_approval, approved, ordered, received, cancelled]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PurchaseOrder"
+    post:
+      operationId: createPurchaseOrder
+      tags: [procurement]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePurchaseOrderBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+
+  /procurement/purchase-orders/{id}:
+    get:
+      operationId: getPurchaseOrder
+      tags: [procurement]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+    patch:
+      operationId: updatePurchaseOrder
+      tags: [procurement]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePurchaseOrderBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+
+  /procurement/stats:
+    get:
+      operationId: getProcurementStats
+      tags: [procurement]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcurementStats"
+
+  # Vendors
+  /vendors:
+    get:
+      operationId: listVendors
+      tags: [vendors]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vendor"
+    post:
+      operationId: createVendor
+      tags: [vendors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVendorBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+
+  /vendors/{id}:
+    get:
+      operationId: getVendor
+      tags: [vendors]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+    patch:
+      operationId: updateVendor
+      tags: [vendors]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVendorBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vendor"
+
+  # Inventory
+  /inventory/materials:
+    get:
+      operationId: listMaterials
+      tags: [inventory]
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [cement, steel, sand, aggregate, metal, wood, electrical, plumbing, other]
+        - name: lowStock
+          in: query
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Material"
+    post:
+      operationId: createMaterial
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMaterialBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Material"
+
+  /inventory/materials/{id}:
+    patch:
+      operationId: updateMaterial
+      tags: [inventory]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMaterialBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Material"
+
+  /inventory/stock-movements:
+    get:
+      operationId: listStockMovements
+      tags: [inventory]
+      parameters:
+        - name: materialId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockMovement"
+    post:
+      operationId: createStockMovement
+      tags: [inventory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStockMovementBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockMovement"
+
+  /inventory/summary:
+    get:
+      operationId: getInventorySummary
+      tags: [inventory]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventorySummary"
+
+  # Tenders
+  /tenders:
+    get:
+      operationId: listTenders
+      tags: [tenders]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [open, submitted, under_evaluation, awarded, lost, cancelled]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tender"
+    post:
+      operationId: createTender
+      tags: [tenders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTenderBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tender"
+
+  /tenders/{id}:
+    get:
+      operationId: getTender
+      tags: [tenders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tender"
+    patch:
+      operationId: updateTender
+      tags: [tenders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTenderBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tender"
+
+  /tenders/stats:
+    get:
+      operationId: getTenderStats
+      tags: [tenders]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenderStats"
+
+  # Vehicles
+  /vehicles:
+    get:
+      operationId: listVehicles
+      tags: [vehicles]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [available, in_use, maintenance, out_of_service]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+    patch:
+      operationId: updateVehicle
+      tags: [vehicles]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVehicleBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/maintenance:
+    get:
+      operationId: listMaintenanceRecords
+      tags: [vehicles]
+      parameters:
+        - name: vehicleId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaintenanceRecord"
+    post:
+      operationId: createMaintenanceRecord
+      tags: [vehicles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMaintenanceRecordBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceRecord"
+
+  /vehicles/fuel-logs:
+    get:
+      operationId: listFuelLogs
+      tags: [vehicles]
+      parameters:
+        - name: vehicleId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FuelLog"
+    post:
+      operationId: createFuelLog
+      tags: [vehicles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateFuelLogBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FuelLog"
+
+  /vehicles/stats:
+    get:
+      operationId: getVehicleStats
+      tags: [vehicles]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VehicleStats"
+
+  # HR
+  /hr/employees:
+    get:
+      operationId: listEmployees
+      tags: [hr]
+      parameters:
+        - name: department
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Employee"
+    post:
+      operationId: createEmployee
+      tags: [hr]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEmployeeBody"
+      responses:
+        "201":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  /hr/employees/{id}:
+    get:
+      operationId: getEmployee
+      tags: [hr]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+    patch:
+      operationId: updateEmployee
+      tags: [hr]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmployeeBody"
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Employee"
+
+  /hr/summary:
+    get:
+      operationId: getHRSummary
+      tags: [hr]
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HRSummary"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +874,954 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    DashboardSummary:
+      type: object
+      properties:
+        totalProjects:
+          type: integer
+        activeProjects:
+          type: integer
+        totalRevenue:
+          type: number
+        pendingInvoices:
+          type: number
+        openTenders:
+          type: integer
+        vehiclesInMaintenance:
+          type: integer
+        lowStockItems:
+          type: integer
+        pendingPurchaseOrders:
+          type: integer
+        totalEmployees:
+          type: integer
+        monthlyExpenses:
+          type: number
+        monthlyIncome:
+          type: number
+      required:
+        - totalProjects
+        - activeProjects
+        - totalRevenue
+        - pendingInvoices
+        - openTenders
+        - vehiclesInMaintenance
+        - lowStockItems
+        - pendingPurchaseOrders
+        - totalEmployees
+        - monthlyExpenses
+        - monthlyIncome
+
+    ActivityItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        description:
+          type: string
+        module:
+          type: string
+        createdAt:
+          type: string
+      required: [id, type, description, module, createdAt]
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        client:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+          enum: [planning, active, on_hold, completed, cancelled]
+        budget:
+          type: number
+        spent:
+          type: number
+        startDate:
+          type: string
+        endDate:
+          type: string
+        description:
+          type: string
+        progress:
+          type: integer
+        projectManager:
+          type: string
+        createdAt:
+          type: string
+      required:
+        - id
+        - name
+        - code
+        - client
+        - location
+        - status
+        - budget
+        - spent
+        - startDate
+        - endDate
+        - progress
+        - projectManager
+        - createdAt
+
+    CreateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        client:
+          type: string
+        location:
+          type: string
+        status:
+          type: string
+        budget:
+          type: number
+        startDate:
+          type: string
+        endDate:
+          type: string
+        description:
+          type: string
+        projectManager:
+          type: string
+      required: [name, code, client, location, budget, startDate, endDate, projectManager]
+
+    UpdateProjectBody:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        budget:
+          type: number
+        spent:
+          type: number
+        progress:
+          type: integer
+        description:
+          type: string
+        endDate:
+          type: string
+
+    ProjectStats:
+      type: object
+      properties:
+        byStatus:
+          type: array
+          items:
+            type: object
+            properties:
+              status:
+                type: string
+              count:
+                type: integer
+            required: [status, count]
+        totalBudget:
+          type: number
+        totalSpent:
+          type: number
+      required: [byStatus, totalBudget, totalSpent]
+
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [income, expense]
+        category:
+          type: string
+        amount:
+          type: number
+        gstAmount:
+          type: number
+        description:
+          type: string
+        projectId:
+          type: integer
+        projectName:
+          type: string
+        date:
+          type: string
+        paymentMode:
+          type: string
+        reference:
+          type: string
+        createdAt:
+          type: string
+      required: [id, type, category, amount, gstAmount, description, date, createdAt]
+
+    CreateTransactionBody:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [income, expense]
+        category:
+          type: string
+        amount:
+          type: number
+        gstAmount:
+          type: number
+        description:
+          type: string
+        projectId:
+          type: integer
+        date:
+          type: string
+        paymentMode:
+          type: string
+        reference:
+          type: string
+      required: [type, category, amount, description, date]
+
+    FinanceSummary:
+      type: object
+      properties:
+        totalIncome:
+          type: number
+        totalExpense:
+          type: number
+        netProfit:
+          type: number
+        pendingReceivables:
+          type: number
+        pendingPayables:
+          type: number
+        gstCollected:
+          type: number
+        gstPaid:
+          type: number
+      required:
+        - totalIncome
+        - totalExpense
+        - netProfit
+        - pendingReceivables
+        - pendingPayables
+        - gstCollected
+        - gstPaid
+
+    MonthlyCashflow:
+      type: object
+      properties:
+        month:
+          type: string
+        income:
+          type: number
+        expense:
+          type: number
+      required: [month, income, expense]
+
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNumber:
+          type: string
+        client:
+          type: string
+        projectId:
+          type: integer
+        projectName:
+          type: string
+        amount:
+          type: number
+        gstAmount:
+          type: number
+        totalAmount:
+          type: number
+        status:
+          type: string
+          enum: [draft, sent, paid, overdue]
+        dueDate:
+          type: string
+        issueDate:
+          type: string
+        createdAt:
+          type: string
+      required: [id, invoiceNumber, client, amount, gstAmount, totalAmount, status, dueDate, issueDate, createdAt]
+
+    CreateInvoiceBody:
+      type: object
+      properties:
+        client:
+          type: string
+        projectId:
+          type: integer
+        amount:
+          type: number
+        gstAmount:
+          type: number
+        dueDate:
+          type: string
+        issueDate:
+          type: string
+      required: [client, amount, gstAmount, dueDate, issueDate]
+
+    PurchaseOrder:
+      type: object
+      properties:
+        id:
+          type: integer
+        poNumber:
+          type: string
+        vendorId:
+          type: integer
+        vendorName:
+          type: string
+        projectId:
+          type: integer
+        projectName:
+          type: string
+        status:
+          type: string
+          enum: [draft, pending_approval, approved, ordered, received, cancelled]
+        totalAmount:
+          type: number
+        gstAmount:
+          type: number
+        description:
+          type: string
+        requiredDate:
+          type: string
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/POItem"
+      required: [id, poNumber, vendorId, vendorName, status, totalAmount, gstAmount, requiredDate, createdAt]
+
+    POItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        materialName:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        unitPrice:
+          type: number
+        totalPrice:
+          type: number
+      required: [id, materialName, quantity, unit, unitPrice, totalPrice]
+
+    CreatePurchaseOrderBody:
+      type: object
+      properties:
+        vendorId:
+          type: integer
+        projectId:
+          type: integer
+        description:
+          type: string
+        requiredDate:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              materialName:
+                type: string
+              quantity:
+                type: number
+              unit:
+                type: string
+              unitPrice:
+                type: number
+            required: [materialName, quantity, unit, unitPrice]
+      required: [vendorId, requiredDate, items]
+
+    UpdatePurchaseOrderBody:
+      type: object
+      properties:
+        status:
+          type: string
+        description:
+          type: string
+
+    ProcurementStats:
+      type: object
+      properties:
+        totalOrders:
+          type: integer
+        pendingApproval:
+          type: integer
+        totalValue:
+          type: number
+        thisMonthValue:
+          type: number
+      required: [totalOrders, pendingApproval, totalValue, thisMonthValue]
+
+    Vendor:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        contactPerson:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        gstNumber:
+          type: string
+        panNumber:
+          type: string
+        category:
+          type: string
+        rating:
+          type: number
+        status:
+          type: string
+          enum: [active, inactive, blacklisted]
+        createdAt:
+          type: string
+      required: [id, name, phone, category, rating, status, createdAt]
+
+    CreateVendorBody:
+      type: object
+      properties:
+        name:
+          type: string
+        contactPerson:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        gstNumber:
+          type: string
+        panNumber:
+          type: string
+        category:
+          type: string
+      required: [name, phone, category]
+
+    UpdateVendorBody:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        rating:
+          type: number
+        contactPerson:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+
+    Material:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+          enum: [cement, steel, sand, aggregate, metal, wood, electrical, plumbing, other]
+        unit:
+          type: string
+        currentStock:
+          type: number
+        minimumStock:
+          type: number
+        unitCost:
+          type: number
+        totalValue:
+          type: number
+        location:
+          type: string
+        lastUpdated:
+          type: string
+        createdAt:
+          type: string
+      required: [id, name, category, unit, currentStock, minimumStock, unitCost, totalValue, createdAt]
+
+    CreateMaterialBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+        unit:
+          type: string
+        currentStock:
+          type: number
+        minimumStock:
+          type: number
+        unitCost:
+          type: number
+        location:
+          type: string
+      required: [name, category, unit, minimumStock, unitCost]
+
+    UpdateMaterialBody:
+      type: object
+      properties:
+        name:
+          type: string
+        currentStock:
+          type: number
+        minimumStock:
+          type: number
+        unitCost:
+          type: number
+        location:
+          type: string
+
+    StockMovement:
+      type: object
+      properties:
+        id:
+          type: integer
+        materialId:
+          type: integer
+        materialName:
+          type: string
+        type:
+          type: string
+          enum: [in, out, adjustment]
+        quantity:
+          type: number
+        unit:
+          type: string
+        projectId:
+          type: integer
+        projectName:
+          type: string
+        reason:
+          type: string
+        date:
+          type: string
+        createdAt:
+          type: string
+      required: [id, materialId, materialName, type, quantity, unit, reason, date, createdAt]
+
+    CreateStockMovementBody:
+      type: object
+      properties:
+        materialId:
+          type: integer
+        type:
+          type: string
+          enum: [in, out, adjustment]
+        quantity:
+          type: number
+        projectId:
+          type: integer
+        reason:
+          type: string
+        date:
+          type: string
+      required: [materialId, type, quantity, reason, date]
+
+    InventorySummary:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+        totalValue:
+          type: number
+        lowStockCount:
+          type: integer
+        byCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+              count:
+                type: integer
+              value:
+                type: number
+            required: [category, count, value]
+      required: [totalItems, totalValue, lowStockCount, byCategory]
+
+    Tender:
+      type: object
+      properties:
+        id:
+          type: integer
+        tenderNumber:
+          type: string
+        title:
+          type: string
+        client:
+          type: string
+        location:
+          type: string
+        estimatedValue:
+          type: number
+        bidAmount:
+          type: number
+        status:
+          type: string
+          enum: [open, submitted, under_evaluation, awarded, lost, cancelled]
+        submissionDate:
+          type: string
+        openingDate:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        createdAt:
+          type: string
+      required: [id, tenderNumber, title, client, location, estimatedValue, status, submissionDate, openingDate, createdAt]
+
+    CreateTenderBody:
+      type: object
+      properties:
+        title:
+          type: string
+        client:
+          type: string
+        location:
+          type: string
+        estimatedValue:
+          type: number
+        bidAmount:
+          type: number
+        submissionDate:
+          type: string
+        openingDate:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+      required: [title, client, location, estimatedValue, submissionDate, openingDate]
+
+    UpdateTenderBody:
+      type: object
+      properties:
+        status:
+          type: string
+        bidAmount:
+          type: number
+        description:
+          type: string
+
+    TenderStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        open:
+          type: integer
+        awarded:
+          type: integer
+        successRate:
+          type: number
+        totalBidValue:
+          type: number
+      required: [total, open, awarded, successRate, totalBidValue]
+
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: integer
+        registrationNumber:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        type:
+          type: string
+          enum: [truck, excavator, crane, mixer, tipper, JCB, other]
+        year:
+          type: integer
+        status:
+          type: string
+          enum: [available, in_use, maintenance, out_of_service]
+        driver:
+          type: string
+        assignedProject:
+          type: string
+        lastService:
+          type: string
+        nextService:
+          type: string
+        fuelType:
+          type: string
+        odometer:
+          type: number
+        insuranceExpiry:
+          type: string
+        createdAt:
+          type: string
+      required: [id, registrationNumber, make, model, type, year, status, createdAt]
+
+    CreateVehicleBody:
+      type: object
+      properties:
+        registrationNumber:
+          type: string
+        make:
+          type: string
+        model:
+          type: string
+        type:
+          type: string
+        year:
+          type: integer
+        fuelType:
+          type: string
+        driver:
+          type: string
+        insuranceExpiry:
+          type: string
+      required: [registrationNumber, make, model, type, year, fuelType]
+
+    UpdateVehicleBody:
+      type: object
+      properties:
+        status:
+          type: string
+        driver:
+          type: string
+        assignedProject:
+          type: string
+        odometer:
+          type: number
+        nextService:
+          type: string
+
+    MaintenanceRecord:
+      type: object
+      properties:
+        id:
+          type: integer
+        vehicleId:
+          type: integer
+        vehicleRegistration:
+          type: string
+        type:
+          type: string
+          enum: [scheduled, breakdown, inspection]
+        description:
+          type: string
+        cost:
+          type: number
+        date:
+          type: string
+        completedDate:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, completed]
+        mechanicName:
+          type: string
+        createdAt:
+          type: string
+      required: [id, vehicleId, vehicleRegistration, type, description, cost, date, status, createdAt]
+
+    CreateMaintenanceRecordBody:
+      type: object
+      properties:
+        vehicleId:
+          type: integer
+        type:
+          type: string
+          enum: [scheduled, breakdown, inspection]
+        description:
+          type: string
+        cost:
+          type: number
+        date:
+          type: string
+        mechanicName:
+          type: string
+      required: [vehicleId, type, description, cost, date]
+
+    FuelLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        vehicleId:
+          type: integer
+        vehicleRegistration:
+          type: string
+        liters:
+          type: number
+        costPerLiter:
+          type: number
+        totalCost:
+          type: number
+        odometer:
+          type: number
+        date:
+          type: string
+        filledBy:
+          type: string
+        createdAt:
+          type: string
+      required: [id, vehicleId, vehicleRegistration, liters, costPerLiter, totalCost, date, createdAt]
+
+    CreateFuelLogBody:
+      type: object
+      properties:
+        vehicleId:
+          type: integer
+        liters:
+          type: number
+        costPerLiter:
+          type: number
+        odometer:
+          type: number
+        date:
+          type: string
+        filledBy:
+          type: string
+      required: [vehicleId, liters, costPerLiter, odometer, date]
+
+    VehicleStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        available:
+          type: integer
+        inUse:
+          type: integer
+        inMaintenance:
+          type: integer
+        totalFuelCost:
+          type: number
+        totalMaintenanceCost:
+          type: number
+      required: [total, available, inUse, inMaintenance, totalFuelCost, totalMaintenanceCost]
+
+    Employee:
+      type: object
+      properties:
+        id:
+          type: integer
+        employeeId:
+          type: string
+        name:
+          type: string
+        designation:
+          type: string
+        department:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+        joinDate:
+          type: string
+        salary:
+          type: number
+        skills:
+          type: array
+          items:
+            type: string
+        assignedProject:
+          type: string
+        createdAt:
+          type: string
+      required: [id, employeeId, name, designation, department, phone, status, joinDate, salary, createdAt]
+
+    CreateEmployeeBody:
+      type: object
+      properties:
+        name:
+          type: string
+        designation:
+          type: string
+        department:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        joinDate:
+          type: string
+        salary:
+          type: number
+        skills:
+          type: array
+          items:
+            type: string
+      required: [name, designation, department, phone, joinDate, salary]
+
+    UpdateEmployeeBody:
+      type: object
+      properties:
+        designation:
+          type: string
+        department:
+          type: string
+        status:
+          type: string
+        salary:
+          type: number
+        skills:
+          type: array
+          items:
+            type: string
+        assignedProject:
+          type: string
+
+    HRSummary:
+      type: object
+      properties:
+        totalEmployees:
+          type: integer
+        byDepartment:
+          type: array
+          items:
+            type: object
+            properties:
+              department:
+                type: string
+              count:
+                type: integer
+            required: [department, count]
+        totalPayroll:
+          type: number
+        activeCount:
+          type: integer
+      required: [totalEmployees, byDepartment, totalPayroll, activeCount]
