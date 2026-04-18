@@ -1,4 +1,4 @@
-import { pgTable, serial, text, numeric, timestamp, varchar, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, numeric, timestamp, varchar, integer, pgEnum } from "drizzle-orm/pg-core";
 
 // Enums
 export const projectStatusEnum = pgEnum("project_status", ["planning", "active", "on_hold", "completed", "cancelled"]);
@@ -9,6 +9,7 @@ export const materialCategoryEnum = pgEnum("material_category", ["cement", "stee
 export const tenderStatusEnum = pgEnum("tender_status", ["open", "submitted", "under_evaluation", "awarded", "lost", "cancelled"]);
 export const vehicleStatusEnum = pgEnum("vehicle_status", ["available", "in_use", "maintenance", "out_of_service"]);
 export const employeeStatusEnum = pgEnum("employee_status", ["active", "inactive"]);
+export const stockMovementTypeEnum = pgEnum("stock_movement_type", ["inbound", "outbound", "adjustment"]);
 
 // Projects
 export const projects = pgTable("projects", {
@@ -101,7 +102,7 @@ export const materials = pgTable("materials", {
 export const stockMovements = pgTable("stock_movements", {
   id: serial("id").primaryKey(),
   materialId: integer("material_id").references(() => materials.id).notNull(),
-  type: varchar("type", { length: 20 }).notNull(),
+  type: stockMovementTypeEnum("type").notNull(),
   quantity: numeric("quantity", { precision: 12, scale: 2 }).notNull(),
   reference: varchar("reference", { length: 100 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
