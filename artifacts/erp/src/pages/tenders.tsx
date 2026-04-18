@@ -1,142 +1,204 @@
-import { useState } from "react";
-import { useListTenders, useCreateTender, useGetTenderStats } from "@workspace/api-client-react";
-import { formatINR, getStatusColor, formatDate } from "@/lib/utils/format";
-import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, FileText, Trophy, TrendingUp } from "lucide-react";
-import { useForm } from "react-hook-form";
-import { useQueryClient } from "@tanstack/react-query";
-import { getListTendersQueryKey, getGetTenderStatsQueryKey } from "@workspace/api-client-react";
-
-const STAGES = ["open", "submitted", "under_evaluation", "awarded", "lost", "cancelled"];
+import { useState } from "react";
+import { Plus } from "lucide-react";
+import { formatINR } from "@/lib/utils/format";
 
 export default function Tenders() {
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    client: "",
+    estimatedValue: "",
+    deadlineDate: "",
+    bidAmount: "",
+  });
 
-  const { data: tenders = [], isLoading } = useListTenders(statusFilter && statusFilter !== "all" ? { status: statusFilter as "open" } : undefined);
-  const { data: stats } = useGetTenderStats();
-  const createTender = useCreateTender();
-  const { register, handleSubmit, reset } = useForm<{
-    title: string; client: string; location: string; estimatedValue: number;
-    bidAmount: number; submissionDate: string; openingDate: string; type: string; description: string;
-  }>();
+  const { data: tenders = [] } = useQuery({
+    queryKey: ["tenders"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenders");
+      return res.json();
+    },
+  });
 
-  const onSubmit = async (data: Parameters<typeof createTender.mutateAsync>[0]) => {
-    await createTender.mutateAsync({
-      ...data,
-      estimatedValue: Number(data.estimatedValue),
-      bidAmount: data.bidAmount ? Number(data.bidAmount) : undefined,
+  const { data: stats } = useQuery({
+    queryKey: ["tenders", "stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/tenders/stats");
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch("/api/tenders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tenders"] });
+      setShowForm(false);
+      setFormData({
+        title: "",
+        description: "",
+        client: "",
+        estimatedValue: "",
+        deadlineDate: "",
+        bidAmount: "",
+      });
+    },
+  });
+
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    createMutation.mutate({
+      ...formData,
+      estimatedValue: parseFloat(formData.estimatedValue),
+      bidAmount: formData.bidAmount ? parseFloat(formData.bidAmount) : null,
     });
-    queryClient.invalidateQueries({ queryKey: getListTendersQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetTenderStatsQueryKey() });
-    reset();
-    setOpen(false);
+  };
+
+  if (!stats) return <div>Loading...</div>;
+
+  const statusColors: Record<string, string> = {
+    open: "bg-blue-100 text-blue-800",
+    submitted: "bg-purple-100 text-purple-800",
+    under_evaluation: "bg-yellow-100 text-yellow-800",
+    awarded: "bg-green-100 text-green-800",
+    lost: "bg-red-100 text-red-800",
+    cancelled: "bg-gray-100 text-gray-800",
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Tender Management</h1>
-          <p className="text-muted-foreground text-sm mt-1">Track bids, tenders, and contract awards</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><PlusCircle className="h-4 w-4" />New Tender</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Add Tender</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit as never)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5 col-span-2"><Label>Tender Title</Label><Input {...register("title", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Client / Authority</Label><Input {...register("client", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Location</Label><Input {...register("location", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Estimated Value (INR)</Label><Input type="number" {...register("estimatedValue", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Bid Amount (INR)</Label><Input type="number" {...register("bidAmount")} /></div>
-                <div className="space-y-1.5"><Label>Submission Date</Label><Input type="date" {...register("submissionDate", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Opening Date</Label><Input type="date" {...register("openingDate", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Type</Label><Input {...register("type")} placeholder="Road / Bridge / Building" /></div>
-                <div className="space-y-1.5 col-span-2"><Label>Description</Label><Input {...register("description")} /></div>
+    <div>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Tenders</h1>
+        <Button onClick={() => setShowForm(!showForm)}>
+          <Plus className="mr-2" size={20} />
+          New Tender
+        </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Total Tenders</p>
+            <p className="text-2xl font-bold">{stats.total}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Win Rate</p>
+            <p className="text-2xl font-bold text-green-600">{stats.winRate}%</p>
+            <p className="text-xs text-gray-500 mt-1">{stats.awarded} awarded</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Open Tenders</p>
+            <p className="text-2xl font-bold text-blue-600">{stats.open}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="Tender Title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Client"
+                  value={formData.client}
+                  onChange={(e) => setFormData({ ...formData, client: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Estimated Value"
+                  value={formData.estimatedValue}
+                  onChange={(e) => setFormData({ ...formData, estimatedValue: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  step="0.01"
+                  required
+                />
+                <input
+                  type="date"
+                  value={formData.deadlineDate}
+                  onChange={(e) => setFormData({ ...formData, deadlineDate: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
               </div>
-              <Button type="submit" className="w-full" disabled={createTender.isPending}>
-                {createTender.isPending ? "Saving..." : "Save Tender"}
+              <textarea
+                placeholder="Description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="border rounded px-3 py-2 w-full"
+                rows={3}
+              />
+              <Button type="submit" className="w-full">
+                Create Tender
               </Button>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><FileText className="h-8 w-8 text-primary" /><div><div className="text-2xl font-bold">{stats.total}</div><div className="text-xs text-muted-foreground">Total Tenders</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><Trophy className="h-8 w-8 text-amber-500" /><div><div className="text-2xl font-bold">{stats.awarded}</div><div className="text-xs text-muted-foreground">Awarded</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><TrendingUp className="h-8 w-8 text-green-500" /><div><div className="text-2xl font-bold">{stats.successRate}%</div><div className="text-xs text-muted-foreground">Win Rate</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div><div className="text-xs text-muted-foreground mb-1">Total Bid Value</div><div className="text-xl font-bold">{formatINR(stats.totalBidValue)}</div></div></CardContent></Card>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="flex justify-end">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            {STAGES.map(s => <SelectItem key={s} value={s}>{s.replace("_", " ")}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {isLoading ? (
-        <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />)}</div>
-      ) : (
-        <div className="space-y-3">
-          {tenders.map(tender => (
-            <Card key={tender.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="pt-4 pb-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <span className="font-semibold">{tender.title}</span>
-                      <Badge className={`text-xs ${getStatusColor(tender.status)}`}>{tender.status.replace("_", " ")}</Badge>
-                      {tender.type && <Badge variant="outline" className="text-xs">{tender.type}</Badge>}
-                    </div>
-                    <div className="text-sm text-muted-foreground">{tender.client} · {tender.location}</div>
-                    <div className="text-xs text-muted-foreground font-mono mt-0.5">{tender.tenderNumber}</div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-4 md:min-w-[350px]">
-                    <div>
-                      <div className="text-xs text-muted-foreground">Estimated Value</div>
-                      <div className="font-semibold text-sm">{formatINR(tender.estimatedValue)}</div>
-                    </div>
-                    {tender.bidAmount && (
-                      <div>
-                        <div className="text-xs text-muted-foreground">Bid Amount</div>
-                        <div className="font-semibold text-sm">{formatINR(tender.bidAmount)}</div>
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-xs text-muted-foreground">Submission</div>
-                      <div className="font-semibold text-sm">{formatDate(tender.submissionDate)}</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {tenders.length === 0 && (
-            <div className="text-center py-12 text-muted-foreground">
-              <FileText className="h-12 w-12 mx-auto mb-3 opacity-30" />
-              <div>No tenders found</div>
-            </div>
-          )}
-        </div>
-      )}
+      {/* Tenders Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Tenders</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b">
+                <tr>
+                  <th className="text-left py-2 px-4">Title</th>
+                  <th className="text-left py-2 px-4">Client</th>
+                  <th className="text-left py-2 px-4">Est. Value</th>
+                  <th className="text-left py-2 px-4">Status</th>
+                  <th className="text-left py-2 px-4">Deadline</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tenders.map((tender: any) => (
+                  <tr key={tender.id} className="border-b hover:bg-gray-50">
+                    <td className="py-2 px-4 font-medium">{tender.title}</td>
+                    <td className="py-2 px-4">{tender.client}</td>
+                    <td className="py-2 px-4">{formatINR(tender.estimatedValue)}</td>
+                    <td className="py-2 px-4">
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${statusColors[tender.status]}`}>
+                        {tender.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="py-2 px-4">{new Date(tender.deadlineDate).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
