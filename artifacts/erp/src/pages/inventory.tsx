@@ -1,172 +1,223 @@
-import { useState } from "react";
-import { useListMaterials, useCreateMaterial, useGetInventorySummary, useListStockMovements } from "@workspace/api-client-react";
-import { formatINR, getStatusColor, formatDate } from "@/lib/utils/format";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Package, AlertTriangle } from "lucide-react";
-import { useForm, Controller } from "react-hook-form";
-import { useQueryClient } from "@tanstack/react-query";
-import { getListMaterialsQueryKey, getGetInventorySummaryQueryKey } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { Plus, AlertCircle } from "lucide-react";
+import { formatINR } from "@/lib/utils/format";
 
 export default function Inventory() {
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    category: "cement",
+    unit: "kg",
+    quantity: "",
+    minimumStock: "",
+    unitPrice: "",
+  });
 
-  const { data: materials = [], isLoading } = useListMaterials(categoryFilter && categoryFilter !== "all" ? { category: categoryFilter as "cement" } : undefined);
-  const { data: summary } = useGetInventorySummary();
-  const { data: movements = [] } = useListStockMovements();
-  const createMaterial = useCreateMaterial();
-  const { register, handleSubmit, control, reset } = useForm<{
-    name: string; category: string; unit: string; currentStock: number;
-    minimumStock: number; unitCost: number; location: string;
-  }>();
+  const { data: materials = [] } = useQuery({
+    queryKey: ["inventory", "materials"],
+    queryFn: async () => {
+      const res = await fetch("/api/inventory/materials");
+      return res.json();
+    },
+  });
 
-  const onSubmit = async (data: Parameters<typeof createMaterial.mutateAsync>[0]) => {
-    await createMaterial.mutateAsync({
-      ...data,
-      currentStock: Number(data.currentStock),
-      minimumStock: Number(data.minimumStock),
-      unitCost: Number(data.unitCost),
+  const { data: summary } = useQuery({
+    queryKey: ["inventory", "summary"],
+    queryFn: async () => {
+      const res = await fetch("/api/inventory/summary");
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch("/api/inventory/materials", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      setShowForm(false);
+      setFormData({
+        name: "",
+        category: "cement",
+        unit: "kg",
+        quantity: "",
+        minimumStock: "",
+        unitPrice: "",
+      });
+    },
+  });
+
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    createMutation.mutate({
+      ...formData,
+      quantity: parseFloat(formData.quantity),
+      minimumStock: parseFloat(formData.minimumStock),
+      unitPrice: parseFloat(formData.unitPrice),
     });
-    queryClient.invalidateQueries({ queryKey: getListMaterialsQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetInventorySummaryQueryKey() });
-    reset();
-    setOpen(false);
   };
 
-  const categories = ["cement", "steel", "sand", "aggregate", "metal", "wood", "electrical", "plumbing", "other"];
+  const lowStockItems = materials.filter((m: any) => m.quantity <= m.minimumStock);
+
+  if (!summary) return <div>Loading...</div>;
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Inventory & Stores</h1>
-          <p className="text-muted-foreground text-sm mt-1">Material stock tracking and management</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><PlusCircle className="h-4 w-4" />Add Material</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add New Material</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit as never)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5 col-span-2"><Label>Material Name</Label><Input {...register("name", { required: true })} /></div>
-                <div className="space-y-1.5">
-                  <Label>Category</Label>
-                  <Controller name="category" control={control} rules={{ required: true }} render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>{categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )} />
-                </div>
-                <div className="space-y-1.5"><Label>Unit</Label><Input {...register("unit", { required: true })} placeholder="bags / MT / CuM" /></div>
-                <div className="space-y-1.5"><Label>Current Stock</Label><Input type="number" {...register("currentStock")} placeholder="0" /></div>
-                <div className="space-y-1.5"><Label>Minimum Stock</Label><Input type="number" {...register("minimumStock", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Unit Cost (INR)</Label><Input type="number" {...register("unitCost", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Location</Label><Input {...register("location")} placeholder="Store A - Bay 1" /></div>
-              </div>
-              <Button type="submit" className="w-full" disabled={createMaterial.isPending}>
-                {createMaterial.isPending ? "Adding..." : "Add Material"}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+    <div>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Inventory</h1>
+        <Button onClick={() => setShowForm(!showForm)}>
+          <Plus className="mr-2" size={20} />
+          Add Material
+        </Button>
       </div>
 
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><Package className="h-8 w-8 text-primary" /><div><div className="text-2xl font-bold">{summary.totalItems}</div><div className="text-xs text-muted-foreground">Total Items</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div><div className="text-xs text-muted-foreground mb-1">Total Inventory Value</div><div className="text-xl font-bold">{formatINR(summary.totalValue)}</div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><AlertTriangle className={`h-8 w-8 ${summary.lowStockCount > 0 ? "text-red-500" : "text-muted-foreground"}`} /><div><div className="text-2xl font-bold">{summary.lowStockCount}</div><div className="text-xs text-muted-foreground">Low Stock Alerts</div></div></div></CardContent></Card>
-        </div>
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Total Items</p>
+            <p className="text-2xl font-bold">{summary.totalItems}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">Low Stock Items</p>
+              <p className="text-2xl font-bold text-red-600">{summary.lowStockItems}</p>
+            </div>
+            <AlertCircle className="text-red-600" size={32} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Total Inventory Value</p>
+            <p className="text-2xl font-bold">{formatINR(summary.totalInventoryValue)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="Material Name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="border rounded px-3 py-2"
+                >
+                  <option value="cement">Cement</option>
+                  <option value="steel">Steel</option>
+                  <option value="sand">Sand</option>
+                  <option value="aggregate">Aggregate</option>
+                  <option value="metal">Metal</option>
+                  <option value="wood">Wood</option>
+                  <option value="electrical">Electrical</option>
+                  <option value="plumbing">Plumbing</option>
+                  <option value="other">Other</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Unit (kg, m3, etc)"
+                  value={formData.unit}
+                  onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Quantity"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  step="0.01"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Minimum Stock"
+                  value={formData.minimumStock}
+                  onChange={(e) => setFormData({ ...formData, minimumStock: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  step="0.01"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Unit Price"
+                  value={formData.unitPrice}
+                  onChange={(e) => setFormData({ ...formData, unitPrice: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  step="0.01"
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                Add Material
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      <Tabs defaultValue="materials">
-        <TabsList>
-          <TabsTrigger value="materials">Materials</TabsTrigger>
-          <TabsTrigger value="movements">Stock Movements</TabsTrigger>
-        </TabsList>
-        <TabsContent value="materials" className="space-y-4">
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-48"><SelectValue placeholder="All Categories" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <div className="border rounded-lg overflow-hidden">
+      {/* Materials Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Materials</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50"><tr>
-                <th className="text-left px-4 py-2.5 font-medium">Material</th>
-                <th className="text-left px-4 py-2.5 font-medium">Category</th>
-                <th className="text-right px-4 py-2.5 font-medium">Stock</th>
-                <th className="text-right px-4 py-2.5 font-medium">Min Stock</th>
-                <th className="text-right px-4 py-2.5 font-medium">Unit Cost</th>
-                <th className="text-right px-4 py-2.5 font-medium">Total Value</th>
-                <th className="text-left px-4 py-2.5 font-medium">Location</th>
-              </tr></thead>
-              <tbody className="divide-y">
-                {isLoading ? (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading...</td></tr>
-                ) : materials.map(m => {
-                  const isLow = m.currentStock <= m.minimumStock;
-                  return (
-                    <tr key={m.id} className={`hover:bg-muted/30 ${isLow ? "bg-red-50" : ""}`}>
-                      <td className="px-4 py-2.5 font-medium">
-                        <div className="flex items-center gap-2">
-                          {isLow && <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />}
-                          {m.name}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5"><Badge variant="outline" className="text-xs capitalize">{m.category}</Badge></td>
-                      <td className={`px-4 py-2.5 text-right font-medium ${isLow ? "text-red-600" : ""}`}>{m.currentStock} {m.unit}</td>
-                      <td className="px-4 py-2.5 text-right text-muted-foreground">{m.minimumStock} {m.unit}</td>
-                      <td className="px-4 py-2.5 text-right">{formatINR(m.unitCost)}</td>
-                      <td className="px-4 py-2.5 text-right font-medium">{formatINR(m.totalValue)}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground text-xs">{m.location ?? "-"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </TabsContent>
-        <TabsContent value="movements">
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50"><tr>
-                <th className="text-left px-4 py-2.5 font-medium">Date</th>
-                <th className="text-left px-4 py-2.5 font-medium">Material</th>
-                <th className="text-left px-4 py-2.5 font-medium">Type</th>
-                <th className="text-right px-4 py-2.5 font-medium">Quantity</th>
-                <th className="text-left px-4 py-2.5 font-medium">Project</th>
-                <th className="text-left px-4 py-2.5 font-medium">Reason</th>
-              </tr></thead>
-              <tbody className="divide-y">
-                {movements.map(m => (
-                  <tr key={m.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-2.5 text-muted-foreground">{formatDate(m.date)}</td>
-                    <td className="px-4 py-2.5">{m.materialName}</td>
-                    <td className="px-4 py-2.5"><Badge className={`text-xs ${m.type === "in" ? "bg-green-100 text-green-800" : m.type === "out" ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}`}>{m.type}</Badge></td>
-                    <td className="px-4 py-2.5 text-right">{m.quantity} {m.unit}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{m.projectName ?? "-"}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{m.reason}</td>
+              <thead className="border-b">
+                <tr>
+                  <th className="text-left py-2 px-4">Name</th>
+                  <th className="text-left py-2 px-4">Category</th>
+                  <th className="text-left py-2 px-4">Quantity</th>
+                  <th className="text-left py-2 px-4">Min Stock</th>
+                  <th className="text-left py-2 px-4">Unit Price</th>
+                  <th className="text-left py-2 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {materials.map((m: any) => (
+                  <tr key={m.id} className={`border-b hover:bg-gray-50 ${m.quantity <= m.minimumStock ? "bg-red-50" : ""}`}>
+                    <td className="py-2 px-4 font-medium">{m.name}</td>
+                    <td className="py-2 px-4 text-xs">{m.category}</td>
+                    <td className="py-2 px-4">{m.quantity} {m.unit}</td>
+                    <td className="py-2 px-4">{m.minimumStock} {m.unit}</td>
+                    <td className="py-2 px-4">{formatINR(m.unitPrice)}</td>
+                    <td className="py-2 px-4">
+                      {m.quantity <= m.minimumStock ? (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">Low Stock</span>
+                      ) : (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">OK</span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   );
 }
