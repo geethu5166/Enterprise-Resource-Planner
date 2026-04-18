@@ -1,140 +1,204 @@
-import { useState } from "react";
-import { useListEmployees, useCreateEmployee, useGetHRSummary } from "@workspace/api-client-react";
-import { formatINR, getStatusColor } from "@/lib/utils/format";
-import { Badge } from "@/components/ui/badge";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, Search, Users, IndianRupee } from "lucide-react";
-import { useForm, Controller } from "react-hook-form";
-import { useQueryClient } from "@tanstack/react-query";
-import { getListEmployeesQueryKey, getGetHRSummaryQueryKey } from "@workspace/api-client-react";
-
-const DEPARTMENTS = ["Projects", "Finance", "Procurement", "HR", "Engineering", "Operations", "Admin"];
+import { useState } from "react";
+import { Plus } from "lucide-react";
+import { formatINR } from "@/lib/utils/format";
 
 export default function HR() {
-  const [deptFilter, setDeptFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    department: "",
+    designation: "",
+    salary: "",
+    joinDate: "",
+  });
 
-  const { data: employees = [], isLoading } = useListEmployees(deptFilter && deptFilter !== "all" ? { department: deptFilter } : undefined);
-  const { data: summary } = useGetHRSummary();
-  const createEmployee = useCreateEmployee();
-  const { register, handleSubmit, control, reset } = useForm<{
-    name: string; designation: string; department: string;
-    phone: string; email: string; joinDate: string; salary: number;
-  }>();
+  const { data: employees = [] } = useQuery({
+    queryKey: ["hr", "employees"],
+    queryFn: async () => {
+      const res = await fetch("/api/hr/employees");
+      return res.json();
+    },
+  });
 
-  const filtered = employees.filter(e =>
-    e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.designation.toLowerCase().includes(search.toLowerCase())
-  );
+  const { data: summary } = useQuery({
+    queryKey: ["hr", "summary"],
+    queryFn: async () => {
+      const res = await fetch("/api/hr/summary");
+      return res.json();
+    },
+  });
 
-  const onSubmit = async (data: Parameters<typeof createEmployee.mutateAsync>[0]) => {
-    await createEmployee.mutateAsync({ ...data, salary: Number(data.salary), skills: [] });
-    queryClient.invalidateQueries({ queryKey: getListEmployeesQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetHRSummaryQueryKey() });
-    reset();
-    setOpen(false);
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch("/api/hr/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["hr"] });
+      setShowForm(false);
+      setFormData({
+        name: "",
+        email: "",
+        department: "",
+        designation: "",
+        salary: "",
+        joinDate: "",
+      });
+    },
+  });
+
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    createMutation.mutate({
+      ...formData,
+      salary: parseFloat(formData.salary),
+    });
   };
 
+  if (!summary) return <div>Loading...</div>;
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Human Resources</h1>
-          <p className="text-muted-foreground text-sm mt-1">Employee directory and workforce management</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><PlusCircle className="h-4 w-4" />Add Employee</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Add Employee</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit as never)} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5 col-span-2"><Label>Full Name</Label><Input {...register("name", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Designation</Label><Input {...register("designation", { required: true })} /></div>
-                <div className="space-y-1.5">
-                  <Label>Department</Label>
-                  <Controller name="department" control={control} rules={{ required: true }} render={({ field }) => (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                      <SelectContent>{DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}</SelectContent>
-                    </Select>
-                  )} />
-                </div>
-                <div className="space-y-1.5"><Label>Phone</Label><Input {...register("phone", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Email</Label><Input type="email" {...register("email")} /></div>
-                <div className="space-y-1.5"><Label>Join Date</Label><Input type="date" {...register("joinDate", { required: true })} /></div>
-                <div className="space-y-1.5"><Label>Monthly Salary (INR)</Label><Input type="number" {...register("salary", { required: true })} /></div>
+    <div>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">HR</h1>
+        <Button onClick={() => setShowForm(!showForm)}>
+          <Plus className="mr-2" size={20} />
+          Add Employee
+        </Button>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Total Employees</p>
+            <p className="text-2xl font-bold">{summary.totalEmployees}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Active</p>
+            <p className="text-2xl font-bold text-green-600">{summary.activeEmployees}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Total Payroll</p>
+            <p className="text-lg font-bold">{formatINR(summary.totalPayroll)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Avg Salary</p>
+            <p className="text-lg font-bold">{formatINR(summary.averageSalary)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="Name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="email"
+                  placeholder="Email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Department"
+                  value={formData.department}
+                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="text"
+                  placeholder="Designation"
+                  value={formData.designation}
+                  onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Salary"
+                  value={formData.salary}
+                  onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  step="0.01"
+                  required
+                />
+                <input
+                  type="date"
+                  value={formData.joinDate}
+                  onChange={(e) => setFormData({ ...formData, joinDate: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
               </div>
-              <Button type="submit" className="w-full" disabled={createEmployee.isPending}>
-                {createEmployee.isPending ? "Adding..." : "Add Employee"}
+              <Button type="submit" className="w-full">
+                Add Employee
               </Button>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><Users className="h-8 w-8 text-primary" /><div><div className="text-2xl font-bold">{summary.totalEmployees}</div><div className="text-xs text-muted-foreground">Total Employees</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center"><span className="text-green-600 font-bold text-sm">{summary.activeCount}</span></div><div><div className="text-2xl font-bold">{summary.activeCount}</div><div className="text-xs text-muted-foreground">Active</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div><div className="text-xs text-muted-foreground mb-1">Monthly Payroll</div><div className="text-xl font-bold">{formatINR(summary.totalPayroll)}</div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div><div className="text-xs text-muted-foreground mb-1">Departments</div><div className="text-xl font-bold">{summary.byDepartment.length}</div></div></CardContent></Card>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="flex gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search employees..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <Select value={deptFilter} onValueChange={setDeptFilter}>
-          <SelectTrigger className="w-44"><SelectValue placeholder="All Departments" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50"><tr>
-            <th className="text-left px-4 py-2.5 font-medium">Employee ID</th>
-            <th className="text-left px-4 py-2.5 font-medium">Name</th>
-            <th className="text-left px-4 py-2.5 font-medium">Designation</th>
-            <th className="text-left px-4 py-2.5 font-medium">Department</th>
-            <th className="text-left px-4 py-2.5 font-medium">Phone</th>
-            <th className="text-left px-4 py-2.5 font-medium">Status</th>
-            <th className="text-right px-4 py-2.5 font-medium">Salary</th>
-          </tr></thead>
-          <tbody className="divide-y">
-            {isLoading ? (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">Loading...</td></tr>
-            ) : filtered.map(emp => (
-              <tr key={emp.id} className="hover:bg-muted/30">
-                <td className="px-4 py-2.5 font-mono text-xs">{emp.employeeId}</td>
-                <td className="px-4 py-2.5 font-medium">{emp.name}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{emp.designation}</td>
-                <td className="px-4 py-2.5"><Badge variant="outline" className="text-xs">{emp.department}</Badge></td>
-                <td className="px-4 py-2.5 text-muted-foreground">{emp.phone}</td>
-                <td className="px-4 py-2.5"><Badge className={`text-xs ${getStatusColor(emp.status)}`}>{emp.status}</Badge></td>
-                <td className="px-4 py-2.5 text-right font-medium">{formatINR(emp.salary)}</td>
-              </tr>
-            ))}
-            {filtered.length === 0 && !isLoading && (
-              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No employees found</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Employees Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Employees</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b">
+                <tr>
+                  <th className="text-left py-2 px-4">Name</th>
+                  <th className="text-left py-2 px-4">Department</th>
+                  <th className="text-left py-2 px-4">Designation</th>
+                  <th className="text-left py-2 px-4">Salary</th>
+                  <th className="text-left py-2 px-4">Join Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map((emp: any) => (
+                  <tr key={emp.id} className="border-b hover:bg-gray-50">
+                    <td className="py-2 px-4 font-medium">{emp.name}</td>
+                    <td className="py-2 px-4">{emp.department}</td>
+                    <td className="py-2 px-4">{emp.designation}</td>
+                    <td className="py-2 px-4">{formatINR(emp.salary)}</td>
+                    <td className="py-2 px-4">{new Date(emp.joinDate).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
