@@ -1,59 +1,37 @@
-import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Layout } from "@/components/layout";
-import NotFound from "@/pages/not-found";
-import Dashboard from "./pages/dashboard";
-import Projects from "./pages/projects";
-import Finance from "./pages/finance";
-import Procurement from "./pages/procurement";
-import Vendors from "./pages/vendors";
-import Inventory from "./pages/inventory";
-import Tenders from "./pages/tenders";
-import Vehicles from "./pages/vehicles";
-import HR from "./pages/hr";
+import { Router, Switch, Route } from "wouter";
+import { useState } from "react";
+import Layout from "./components/Layout";
+import Dashboard from "./pages/Dashboard";
+import Projects from "./pages/Projects";
+import Finance from "./pages/Finance";
+import Procurement from "./pages/Procurement";
+import Vendors from "./pages/Vendors";
+import Inventory from "./pages/Inventory";
+import Tenders from "./pages/Tenders";
+import Vehicles from "./pages/Vehicles";
+import HR from "./pages/HR";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 30000,
-      retry: 1,
-    },
-  },
-});
+const queryClient = new QueryClient();
 
-function Router() {
-  return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={() => <Redirect to="/dashboard" />} />
-        <Route path="/dashboard" component={Dashboard} />
-        <Route path="/projects" component={Projects} />
-        <Route path="/finance" component={Finance} />
-        <Route path="/procurement" component={Procurement} />
-        <Route path="/vendors" component={Vendors} />
-        <Route path="/inventory" component={Inventory} />
-        <Route path="/tenders" component={Tenders} />
-        <Route path="/vehicles" component={Vehicles} />
-        <Route path="/hr" component={HR} />
-        <Route component={NotFound} />
-      </Switch>
-    </Layout>
-  );
-}
-
-function App() {
+export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
+      <Router>
+        <Layout>
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/projects" component={Projects} />
+            <Route path="/finance" component={Finance} />
+            <Route path="/procurement" component={Procurement} />
+            <Route path="/vendors" component={Vendors} />
+            <Route path="/inventory" component={Inventory} />
+            <Route path="/tenders" component={Tenders} />
+            <Route path="/vehicles" component={Vehicles} />
+            <Route path="/hr" component={HR} />
+          </Switch>
+        </Layout>
+      </Router>
     </QueryClientProvider>
   );
 }
-
-export default App;
