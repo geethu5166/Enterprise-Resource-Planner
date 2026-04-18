@@ -1,130 +1,229 @@
-import { useState } from "react";
-import { useListPurchaseOrders, useCreatePurchaseOrder, useGetProcurementStats, useListVendors } from "@workspace/api-client-react";
-import { formatINR, getStatusColor, formatDate } from "@/lib/utils/format";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { PlusCircle, ShoppingCart, Clock, IndianRupee } from "lucide-react";
-import { useForm, Controller } from "react-hook-form";
-import { useQueryClient } from "@tanstack/react-query";
-import { getListPurchaseOrdersQueryKey, getGetProcurementStatsQueryKey } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { Plus } from "lucide-react";
+import { formatINR } from "@/lib/utils/format";
 
 export default function Procurement() {
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState({
+    poNumber: "",
+    vendorId: "",
+    amount: "",
+    description: "",
+    orderDate: new Date().toISOString().split("T")[0],
+  });
 
-  const { data: orders = [], isLoading } = useListPurchaseOrders(statusFilter && statusFilter !== "all" ? { status: statusFilter as "draft" } : undefined);
-  const { data: stats } = useGetProcurementStats();
-  const { data: vendors = [] } = useListVendors();
-  const createPO = useCreatePurchaseOrder();
-  const { register, handleSubmit, control, reset } = useForm<{
-    vendorId: number; requiredDate: string; description: string;
-  }>();
+  const { data: pos = [] } = useQuery({
+    queryKey: ["procurement", "pos"],
+    queryFn: async () => {
+      const res = await fetch("/api/procurement/purchase-orders");
+      return res.json();
+    },
+  });
 
-  const onSubmit = async (data: Parameters<typeof createPO.mutateAsync>[0]) => {
-    await createPO.mutateAsync({
-      ...data,
-      vendorId: Number(data.vendorId),
-      items: [{ materialName: "Cement OPC 53", quantity: 100, unit: "bags", unitPrice: 380 }],
+  const { data: stats } = useQuery({
+    queryKey: ["procurement", "stats"],
+    queryFn: async () => {
+      const res = await fetch("/api/procurement/stats");
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch("/api/procurement/purchase-orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procurement"] });
+      setShowForm(false);
+      setFormData({
+        poNumber: "",
+        vendorId: "",
+        amount: "",
+        description: "",
+        orderDate: new Date().toISOString().split("T")[0],
+      });
+    },
+  });
+
+  const handleSubmit = (e: any) => {
+    e.preventDefault();
+    createMutation.mutate({
+      ...formData,
+      vendorId: parseInt(formData.vendorId),
+      amount: parseFloat(formData.amount),
     });
-    queryClient.invalidateQueries({ queryKey: getListPurchaseOrdersQueryKey() });
-    queryClient.invalidateQueries({ queryKey: getGetProcurementStatsQueryKey() });
-    reset();
-    setOpen(false);
+  };
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }) => {
+      const res = await fetch(`/api/procurement/purchase-orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["procurement"] });
+    },
+  });
+
+  if (!stats) return <div>Loading...</div>;
+
+  const statusColors: Record<string, string> = {
+    draft: "bg-gray-100 text-gray-800",
+    pending_approval: "bg-yellow-100 text-yellow-800",
+    approved: "bg-blue-100 text-blue-800",
+    ordered: "bg-purple-100 text-purple-800",
+    received: "bg-green-100 text-green-800",
+    cancelled: "bg-red-100 text-red-800",
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Procurement</h1>
-          <p className="text-muted-foreground text-sm mt-1">Purchase orders and vendor contracts</p>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2"><PlusCircle className="h-4 w-4" />New PO</Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Create Purchase Order</DialogTitle></DialogHeader>
-            <form onSubmit={handleSubmit(onSubmit as never)} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label>Vendor</Label>
-                <Controller name="vendorId" control={control} rules={{ required: true }} render={({ field }) => (
-                  <Select onValueChange={v => field.onChange(Number(v))} value={field.value?.toString()}>
-                    <SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger>
-                    <SelectContent>
-                      {vendors.map(v => <SelectItem key={v.id} value={v.id.toString()}>{v.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )} />
+    <div>
+      <div className="flex justify-between items-center mb-8">
+        <h1 className="text-3xl font-bold">Procurement</h1>
+        <Button onClick={() => setShowForm(!showForm)}>
+          <Plus className="mr-2" size={20} />
+          New PO
+        </Button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Total POs</p>
+            <p className="text-2xl font-bold">{stats.total}</p>
+            <p className="text-xs text-gray-500 mt-1">Value: {formatINR(stats.totalValue)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Pending Approval</p>
+            <p className="text-2xl font-bold text-yellow-600">{stats.pending}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-sm text-gray-600">Received</p>
+            <p className="text-2xl font-bold text-green-600">{stats.received}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="text"
+                  placeholder="PO Number"
+                  value={formData.poNumber}
+                  onChange={(e) => setFormData({ ...formData, poNumber: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Vendor ID"
+                  value={formData.vendorId}
+                  onChange={(e) => setFormData({ ...formData, vendorId: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
+                <input
+                  type="number"
+                  placeholder="Amount"
+                  value={formData.amount}
+                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  step="0.01"
+                  required
+                />
+                <input
+                  type="date"
+                  value={formData.orderDate}
+                  onChange={(e) => setFormData({ ...formData, orderDate: e.target.value })}
+                  className="border rounded px-3 py-2"
+                  required
+                />
               </div>
-              <div className="space-y-1.5"><Label>Required Date</Label><Input type="date" {...register("requiredDate", { required: true })} /></div>
-              <div className="space-y-1.5"><Label>Description</Label><Input {...register("description")} /></div>
-              <Button type="submit" className="w-full" disabled={createPO.isPending}>
-                {createPO.isPending ? "Creating..." : "Create PO"}
+              <textarea
+                placeholder="Description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="border rounded px-3 py-2 w-full"
+                rows={3}
+              />
+              <Button type="submit" className="w-full">
+                Create PO
               </Button>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><ShoppingCart className="h-8 w-8 text-primary" /><div><div className="text-2xl font-bold">{stats.totalOrders}</div><div className="text-xs text-muted-foreground">Total Orders</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div className="flex items-center gap-3"><Clock className="h-8 w-8 text-yellow-500" /><div><div className="text-2xl font-bold">{stats.pendingApproval}</div><div className="text-xs text-muted-foreground">Pending Approval</div></div></div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground mb-1">Total PO Value</div><div className="text-xl font-bold">{formatINR(stats.totalValue)}</div></CardContent></Card>
-          <Card><CardContent className="pt-4"><div className="text-xs text-muted-foreground mb-1">This Month</div><div className="text-xl font-bold">{formatINR(stats.thisMonthValue)}</div></CardContent></Card>
-        </div>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="flex justify-end">
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="pending_approval">Pending Approval</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="ordered">Ordered</SelectItem>
-            <SelectItem value="received">Received</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="border rounded-lg overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50"><tr>
-            <th className="text-left px-4 py-2.5 font-medium">PO Number</th>
-            <th className="text-left px-4 py-2.5 font-medium">Vendor</th>
-            <th className="text-left px-4 py-2.5 font-medium">Project</th>
-            <th className="text-left px-4 py-2.5 font-medium">Required Date</th>
-            <th className="text-left px-4 py-2.5 font-medium">Status</th>
-            <th className="text-right px-4 py-2.5 font-medium">Amount</th>
-          </tr></thead>
-          <tbody className="divide-y">
-            {isLoading ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">Loading...</td></tr>
-            ) : orders.length === 0 ? (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No purchase orders found</td></tr>
-            ) : orders.map(order => (
-              <tr key={order.id} className="hover:bg-muted/30">
-                <td className="px-4 py-2.5 font-mono text-sm">{order.poNumber}</td>
-                <td className="px-4 py-2.5">{order.vendorName}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{order.projectName ?? "-"}</td>
-                <td className="px-4 py-2.5 text-muted-foreground">{formatDate(order.requiredDate)}</td>
-                <td className="px-4 py-2.5"><Badge className={`text-xs ${getStatusColor(order.status)}`}>{order.status.replace("_", " ")}</Badge></td>
-                <td className="px-4 py-2.5 text-right font-medium">{formatINR(order.totalAmount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* POs Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Purchase Orders</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="border-b">
+                <tr>
+                  <th className="text-left py-2 px-4">PO #</th>
+                  <th className="text-left py-2 px-4">Vendor ID</th>
+                  <th className="text-left py-2 px-4">Amount</th>
+                  <th className="text-left py-2 px-4">Status</th>
+                  <th className="text-left py-2 px-4">Order Date</th>
+                  <th className="text-left py-2 px-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pos.map((po: any) => (
+                  <tr key={po.id} className="border-b hover:bg-gray-50">
+                    <td className="py-2 px-4 font-medium">{po.poNumber}</td>
+                    <td className="py-2 px-4">{po.vendorId}</td>
+                    <td className="py-2 px-4">{formatINR(po.amount)}</td>
+                    <td className="py-2 px-4">
+                      <select
+                        value={po.status}
+                        onChange={(e) => updateStatusMutation.mutate({ id: po.id, status: e.target.value })}
+                        className={`px-2 py-1 rounded text-xs font-medium border-0 ${statusColors[po.status]}`}
+                      >
+                        <option value="draft">Draft</option>
+                        <option value="pending_approval">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="ordered">Ordered</option>
+                        <option value="received">Received</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </td>
+                    <td className="py-2 px-4">{new Date(po.orderDate).toLocaleDateString()}</td>
+                    <td className="py-2 px-4">
+                      <button className="text-blue-600 hover:underline text-xs">View</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
